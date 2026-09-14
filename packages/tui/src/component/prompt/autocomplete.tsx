@@ -269,13 +269,16 @@ export function Autocomplete(props: {
   }
 
   const [providers] = createResource(
-    () => location(),
+    () => ({
+      directory: location()?.directory ?? sync.path.directory,
+      workspaceID: location()?.workspaceID,
+    }),
     async (current) =>
       (
         await sdk.request<{ data: AutocompleteProviderInfo[] }>(
           `/api/autocomplete/providers?${new URLSearchParams({
-            "location[directory]": current?.directory ?? sync.path.directory,
-            ...(current?.workspaceID ? { "location[workspace]": current.workspaceID } : {}),
+            "location[directory]": current.directory,
+            ...(current.workspaceID ? { "location[workspace]": current.workspaceID } : {}),
           })}`,
         ).catch(() => ({ data: [] }))
       ).data,
