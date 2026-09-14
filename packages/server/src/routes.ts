@@ -1,3 +1,4 @@
+import { Autocomplete } from "@opencode-ai/core/autocomplete"
 import { Database } from "@opencode-ai/core/database/database"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { httpClient } from "@opencode-ai/core/effect/app-node-platform"
@@ -24,6 +25,7 @@ import { layer as locationLayer } from "./location"
 import { sessionLocationLayer } from "./middleware/session-location"
 
 const applicationServices = LayerNode.group([
+  Autocomplete.node,
   Database.node,
   EventV2.node,
   httpClient,

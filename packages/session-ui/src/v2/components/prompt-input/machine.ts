@@ -7,6 +7,7 @@ export type PromptInputV2InteractionState = {
     | { type: "context"; query: string; activeID?: string }
     | { type: "command-inline"; query: string; activeID?: string }
     | { type: "command-menu"; query: string; activeID?: string }
+    | { type: "plugin"; providerID: string; trigger: string; query: string; activeID?: string }
   drag: "idle" | "active"
   focus: "editor" | "command-search" | "external"
   activeContextID?: string
@@ -15,7 +16,12 @@ export type PromptInputV2InteractionState = {
 }
 
 export type PromptInputV2InteractionEvent =
-  | { type: "input.changed"; value: string; persist?: boolean }
+  | {
+      type: "input.changed"
+      value: string
+      persist?: boolean
+      providers?: ReadonlyArray<{ id: string; trigger: { value: string; kind: "character" | "prefix" } }>
+    }
   | { type: "commands.open" }
   | { type: "context.open" }
   | { type: "popover.query"; value: string }
@@ -35,7 +41,13 @@ export type PromptInputV2InteractionEvent =
 export type PromptInputV2InteractionCommand =
   | { type: "draft.setText"; value: string }
   | { type: "mention.add"; item: PromptInputV2Suggestion }
-  | { type: "popover.filter"; popover: "command" | "context"; query: string }
+  | {
+      type: "popover.filter"
+      popover: "command" | "context" | "plugin"
+      query: string
+      providerID?: string
+      trigger?: string
+    }
   | { type: "suggestion.select"; id: string }
   | { type: "focus.editor" }
   | { type: "focus.command-search" }
@@ -61,7 +73,8 @@ export function transitionPromptInputV2(
   event: PromptInputV2InteractionEvent,
   persisted: PromptInputV2PersistedState,
 ): PromptInputV2Transition {
-  if (event.type === "input.changed") return inputChanged(state, event.value, event.persist !== false, persisted.cursor)
+  if (event.type === "input.changed")
+    return inputChanged(state, event.value, event.persist !== false, persisted.cursor, event.providers ?? [])
   if (event.type === "commands.open") return openCommands(state, persisted)
   if (event.type === "context.open") return openContext(state, persisted)
   if (event.type === "popover.query") return queryChanged(state, event.value)
@@ -86,6 +99,7 @@ function inputChanged(
   value: string,
   persist: boolean,
   cursor: number | undefined,
+  providers: ReadonlyArray<{ id: string; trigger: { value: string; kind: "character" | "prefix" } }>,
 ): PromptInputV2Transition {
   const setText: PromptInputV2InteractionCommand[] = persist ? [{ type: "draft.setText", value }] : []
   if (state.mode === "normal" && value === "!") {
@@ -100,6 +114,26 @@ function inputChanged(
       ...setText,
       { type: "popover.filter", popover: "context", query },
     ])
+  }
+
+  const beforeCursor = value.slice(0, cursor ?? value.length)
+  const provider = providers.find((item) => {
+    const trigger = item.trigger.value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+    return new RegExp(`(?:^|\\s)${trigger}[^\\s]*$`).test(beforeCursor)
+  })
+  if (provider) {
+    const query = beforeCursor.slice(beforeCursor.lastIndexOf(provider.trigger.value) + provider.trigger.value.length)
+    return changed(
+      {
+        ...state,
+        popover: { type: "plugin", providerID: provider.id, trigger: provider.trigger.value, query },
+        focus: "editor",
+      },
+      [
+        ...setText,
+        { type: "popover.filter", popover: "plugin", providerID: provider.id, trigger: provider.trigger.value, query },
+      ],
+    )
   }
 
   const command = value.match(/^\/(\S*)$/)
@@ -147,9 +181,16 @@ function openContext(
 
 function queryChanged(state: PromptInputV2InteractionState, query: string): PromptInputV2Transition {
   if (state.popover.type === "closed") return unchanged(state)
-  const popover = state.popover.type === "context" ? "context" : "command"
+  const popover = state.popover.type === "context" ? "context" : state.popover.type === "plugin" ? "plugin" : "command"
   return changed({ ...state, popover: { ...state.popover, query, activeID: undefined } }, [
-    { type: "popover.filter", popover, query },
+    {
+      type: "popover.filter",
+      popover,
+      query,
+      ...(state.popover.type === "plugin"
+        ? { providerID: state.popover.providerID, trigger: state.popover.trigger }
+        : {}),
+    },
   ])
 }
 

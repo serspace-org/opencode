@@ -67,6 +67,7 @@ import { SessionV2 } from "@opencode-ai/core/session"
 import { SessionExecution } from "@opencode-ai/core/session/execution"
 import * as SessionExecutionLocal from "@opencode-ai/core/session/execution/local"
 import { lazy } from "@/util/lazy"
+import { Autocomplete } from "@opencode-ai/core/autocomplete"
 import { CorsConfig, isAllowedCorsOrigin, type CorsOptions } from "@opencode-ai/server/cors"
 import { serveUIEffect } from "@/server/shared/ui"
 import { ServerAuth } from "@/server/auth"
@@ -179,6 +180,17 @@ const serverRoutes = HttpApiBuilder.layer(Api).pipe(
   Layer.provide(PluginPtyEnvironment.layer),
   Layer.provide([serverHttpApiAuthLayer, v2SchemaErrorLayer]),
 )
+const autocompleteInitializer = Layer.effectDiscard(
+  Effect.gen(function* () {
+    const autocomplete = yield* Autocomplete.Service
+    const plugin = yield* Plugin.Service
+    const instances = yield* InstanceStore.Service
+    yield* Effect.acquireRelease(
+      Effect.sync(() => autocomplete.initialize((directory) => instances.provide({ directory }, plugin.init()))),
+      (dispose) => Effect.sync(dispose),
+    )
+  }),
+)
 
 // `OpenApi.fromApi` is non-trivial; defer until /doc is actually hit so
 // processes that never serve it (CLI, scripts) don't pay at module load.
@@ -220,6 +232,7 @@ const app = LayerNode.group([
   Git.node,
   Ripgrep.node,
   Storage.node,
+  Autocomplete.node,
   Snapshot.node,
   Plugin.node,
   ModelsDev.node,
@@ -279,6 +292,7 @@ export function createRoutes(
     ptyConnectApiRoutes,
     instanceRoutes,
     serverRoutes,
+    autocompleteInitializer,
     docRoute,
     uiRoute,
   ).pipe(

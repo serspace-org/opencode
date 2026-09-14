@@ -1,4 +1,5 @@
 import type { FilePartSource } from "@opencode-ai/sdk/v2/client"
+import type { Accessor } from "solid-js"
 
 type PromptInputV2PartBase = {
   content: string
@@ -25,6 +26,15 @@ export type PromptInputV2AgentPart = PromptInputV2PartBase & {
   name: string
 }
 
+export type PromptInputV2PluginPart = PromptInputV2PartBase & {
+  type: "plugin"
+  providerID: string
+  entityType: string
+  entityID: string
+  display: string
+  metadata?: Record<string, string>
+}
+
 export type PromptInputV2Attachment = {
   type: "image"
   id: string
@@ -38,6 +48,7 @@ export type PromptInputV2Prompt = (
   | PromptInputV2TextPart
   | PromptInputV2FilePart
   | PromptInputV2AgentPart
+  | PromptInputV2PluginPart
   | PromptInputV2Attachment
 )[]
 
@@ -94,7 +105,7 @@ export type PromptInputV2Option = {
 
 export type PromptInputV2Suggestion = {
   id: string
-  kind: "agent" | "command" | "file" | "reference" | "resource"
+  kind: "agent" | "command" | "file" | "reference" | "resource" | "plugin"
   label: string
   title?: string
   trigger?: string
@@ -102,5 +113,14 @@ export type PromptInputV2Suggestion = {
   path?: string
   keybind?: string[]
   recent?: boolean
-  mention?: PromptInputV2FilePart | PromptInputV2AgentPart
+  priority?: number
+  group?: string
+  mention?: PromptInputV2FilePart | PromptInputV2AgentPart | PromptInputV2PluginPart
+}
+
+export type PromptInputV2Autocomplete = {
+  providers: Accessor<
+    ReadonlyArray<{ id: string; trigger: { value: string; kind: "character" | "prefix" }; title: string }>
+  >
+  search: (providerID: string, trigger: string, query: string, signal: AbortSignal) => Promise<PromptInputV2Suggestion[]>
 }

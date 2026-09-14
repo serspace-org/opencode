@@ -2517,6 +2517,99 @@ export type CommandsListOutput = {
   }>
 }
 
+export type AutocompleteProvidersInput = {
+  readonly location?: {
+    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
+  }["location"]
+}
+
+export type AutocompleteProvidersOutput = {
+  readonly location: {
+    readonly directory: string
+    readonly workspaceID?: string
+    readonly project: { readonly id: string; readonly directory: string }
+  }
+  readonly data: ReadonlyArray<{
+    readonly id: string
+    readonly trigger: { readonly value: string; readonly kind: "character" | "prefix"; readonly description?: string }
+    readonly title: string
+    readonly description?: string
+    readonly priority?: number
+    readonly maxResults?: number
+    readonly cacheTTL?: number
+  }>
+}
+
+export type AutocompleteSearchInput = {
+  readonly location?: {
+    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
+    readonly provider: string
+    readonly trigger: string
+    readonly query: string
+    readonly sessionID?: string | undefined
+  }["location"]
+  readonly provider: {
+    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
+    readonly provider: string
+    readonly trigger: string
+    readonly query: string
+    readonly sessionID?: string | undefined
+  }["provider"]
+  readonly trigger: {
+    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
+    readonly provider: string
+    readonly trigger: string
+    readonly query: string
+    readonly sessionID?: string | undefined
+  }["trigger"]
+  readonly query: {
+    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
+    readonly provider: string
+    readonly trigger: string
+    readonly query: string
+    readonly sessionID?: string | undefined
+  }["query"]
+  readonly sessionID?: {
+    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
+    readonly provider: string
+    readonly trigger: string
+    readonly query: string
+    readonly sessionID?: string | undefined
+  }["sessionID"]
+}
+
+export type AutocompleteSearchOutput = {
+  readonly location: {
+    readonly directory: string
+    readonly workspaceID?: string
+    readonly project: { readonly id: string; readonly directory: string }
+  }
+  readonly data: {
+    readonly items: ReadonlyArray<{
+      readonly id: string
+      readonly label: string
+      readonly description?: string
+      readonly group?: string
+      readonly icon?: string
+      readonly detail?: string
+      readonly selection:
+        | { readonly type: "text"; readonly text: string }
+        | {
+            readonly type: "context"
+            readonly content: string
+            readonly display: string
+            readonly source: {
+              readonly providerID: string
+              readonly entityType: string
+              readonly entityID: string
+              readonly metadata?: { readonly [x: string]: string }
+            }
+          }
+    }>
+    readonly stale?: boolean
+  }
+}
+
 export type SkillsListInput = {
   readonly location?: {
     readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined

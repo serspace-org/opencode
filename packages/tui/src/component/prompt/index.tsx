@@ -1033,6 +1033,12 @@ export function Prompt(props: PromptProps) {
       }),
     )
 
+    const autocompleteParts = store.prompt.parts.flatMap((part) =>
+      part.type === "text" && part.metadata?.autocomplete
+        ? [{ ...part, source: undefined, synthetic: true }]
+        : [],
+    )
+
     // Filter out text parts (pasted content) since they're now expanded inline
     const nonTextParts = store.prompt.parts.filter((part) => part.type !== "text")
 
@@ -1105,6 +1111,7 @@ export function Prompt(props: PromptProps) {
                 type: "text",
                 text: inputText,
               },
+              ...autocompleteParts,
               ...nonTextParts,
             ],
           },

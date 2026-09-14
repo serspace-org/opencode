@@ -1,10 +1,11 @@
-import { createEffect, on, type Accessor } from "solid-js"
+import { createEffect, on, onCleanup, type Accessor } from "solid-js"
 import { createStore, reconcile } from "solid-js/store"
 import { useFilteredList } from "@opencode-ai/ui/hooks"
 import { createPromptInputV2Attachments, type PromptInputV2AttachmentConfig } from "./attachments"
 import { createPromptInputV2Store, type PromptInputV2StoreInput } from "./store"
 import type {
   PromptInputV2Attachment,
+  PromptInputV2Autocomplete,
   PromptInputV2Comment,
   PromptInputV2History,
   PromptInputV2HistoryEntry,
@@ -68,6 +69,7 @@ export function createPromptInputV2Controller(input: {
   onSuggestionSelect?: (item: PromptInputV2Suggestion) => (() => void) | void
   view: PromptInputV2ViewConfig
   attachments?: PromptInputV2AttachmentConfig
+  autocomplete?: PromptInputV2Autocomplete
 }) {
   let editor: HTMLElement | undefined
   let fileInput: HTMLInputElement | undefined
@@ -78,7 +80,7 @@ export function createPromptInputV2Controller(input: {
   }
   function addPart(part: PromptInputV2PersistedState["prompt"][number]) {
     if (part.type === "image") return false
-    if (part.type === "file" || part.type === "agent") {
+    if (part.type === "file" || part.type === "agent" || part.type === "plugin") {
       draft.addMention(part)
       return true
     }
@@ -135,8 +137,42 @@ export function createPromptInputV2Controller(input: {
     key: (item) => item.id,
     filterKeys: ["trigger", "title"],
   })
-  const list = () => (state.popover.type === "context" ? contextList : commandList)
-  const suggestions = () => list().flat()
+  let autocompleteAbort: AbortController | undefined
+  const pluginList = useFilteredList<PromptInputV2Suggestion>({
+    items: async () => {
+      autocompleteAbort?.abort()
+      const autocomplete = input.autocomplete
+      if (!autocomplete || (state.popover.type !== "plugin" && state.popover.type !== "context")) return []
+      autocompleteAbort = new AbortController()
+      const signal = autocompleteAbort.signal
+      const providers =
+        state.popover.type === "context"
+          ? autocomplete.providers().filter((provider) => provider.trigger.value === "@")
+          : [{ id: state.popover.providerID, trigger: { value: state.popover.trigger } }]
+      const search = state.popover.query
+      return (
+        await Promise.all(
+          providers.map((provider) =>
+            autocomplete.search(provider.id, provider.trigger.value, search, signal).catch(() => []),
+          ),
+        )
+      ).flat()
+    },
+    key: (item) => item.id,
+    filterKeys: ["label"],
+    skipFilter: () => true,
+    groupBy: (item) => item.group ?? "plugin",
+  })
+  const list = () =>
+    state.popover.type === "context" ? contextList : state.popover.type === "plugin" ? pluginList : commandList
+  onCleanup(() => autocompleteAbort?.abort())
+  const suggestions = () => {
+    const plugins = pluginList.grouped.loading ? [] : pluginList.flat()
+    if (state.popover.type === "context")
+      return [...contextList.flat(), ...plugins].sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0))
+    if (state.popover.type === "plugin") return plugins
+    return list().flat()
+  }
 
   const execute = (command: PromptInputV2InteractionCommand) => {
     if (command.type === "draft.setText") {
@@ -144,11 +180,14 @@ export function createPromptInputV2Controller(input: {
       return
     }
     if (command.type === "mention.add") {
-      if (command.item.mention) draft.addMention(command.item.mention)
+      if (command.item.mention)
+        draft.addMention(command.item.mention, state.popover.type === "plugin" ? state.popover.trigger : "@")
       return
     }
     if (command.type === "popover.filter") {
-      ;(command.popover === "command" ? commandList : contextList).onInput(command.query)
+      ;(command.popover === "command" ? commandList : command.popover === "plugin" ? pluginList : contextList).onInput(
+        command.query,
+      )
       return
     }
     if (command.type === "suggestion.select") {
@@ -340,7 +379,7 @@ export function createPromptInputV2Controller(input: {
     restoreFocus,
     onInput(value: string, prompt?: PromptInputV2PersistedState["prompt"], cursor?: number) {
       if (prompt) draft.setPrompt(prompt, cursor)
-      dispatch({ type: "input.changed", value, persist: !prompt })
+      dispatch({ type: "input.changed", value, persist: !prompt, providers: input.autocomplete?.providers() })
     },
     onCursor(cursor: number) {
       draft.setCursor(cursor)

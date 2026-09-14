@@ -1,4 +1,5 @@
 import { createOpencodeClient } from "@opencode-ai/sdk/v2"
+import { OpenCode } from "@opencode-ai/client"
 import type { GlobalEvent } from "@opencode-ai/sdk/v2"
 import { Flag } from "@opencode-ai/core/flag/flag"
 import { createSimpleContext } from "./helper"
@@ -146,6 +147,9 @@ export const { use: useSDK, provider: SDKProvider } = createSimpleContext({
       event: emitter,
       fetch: props.fetch ?? fetch,
       url: props.url,
+      get api() {
+        return OpenCode.make({ baseUrl: props.url, fetch: props.fetch, headers: props.headers })
+      },
     }
   },
 })

@@ -6,6 +6,7 @@ import type {
   PromptInputV2Comment,
   PromptInputV2FilePart,
   PromptInputV2Model,
+  PromptInputV2PluginPart,
   PromptInputV2PersistedState,
   PromptInputV2Prompt,
 } from "./types"
@@ -73,12 +74,13 @@ export function createPromptInputV2Store(input: PromptInputV2StoreInput) {
     removeContext(key: string) {
       setStore()("context", "items", (items) => items.filter((item) => item.key !== key))
     },
-    addMention(mention: PromptInputV2FilePart | PromptInputV2AgentPart) {
+    addMention(mention: PromptInputV2FilePart | PromptInputV2AgentPart | PromptInputV2PluginPart, trigger = "@") {
       const text = store()
         .prompt.map((part) => ("content" in part ? part.content : ""))
         .join("")
-      const end = store().cursor ?? text.length
-      const start = text.slice(0, end).lastIndexOf("@")
+      const cursor = store().cursor ?? text.length
+      const start = text.slice(0, cursor).lastIndexOf(trigger)
+      const end = mention.type === "plugin" ? cursor + (text.slice(cursor).match(/^\S*/)?.[0].length ?? 0) : cursor
       setStore()("prompt", insertMention(store().prompt, start < 0 ? end : start, end, mention))
       setStore()("cursor", (start < 0 ? end : start) + mention.content.length + 1)
     },
@@ -118,7 +120,7 @@ function insertMention(
   prompt: PromptInputV2Prompt,
   start: number,
   end: number,
-  mention: PromptInputV2FilePart | PromptInputV2AgentPart,
+  mention: PromptInputV2FilePart | PromptInputV2AgentPart | PromptInputV2PluginPart,
 ): PromptInputV2Prompt {
   let position = 0
   const parts = prompt.flatMap<PromptInputV2Prompt[number]>((part) => {
@@ -131,7 +133,7 @@ function insertMention(
     return [
       ...(before ? [{ type: "text" as const, content: before, start: 0, end: 0 }] : []),
       mention,
-      { type: "text" as const, content: ` ${after}`, start: 0, end: 0 },
+      { type: "text" as const, content: after.startsWith(" ") ? after : ` ${after}`, start: 0, end: 0 },
     ]
   })
   return withOffsets(parts)

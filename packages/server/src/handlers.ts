@@ -17,6 +17,7 @@ import { LocationHandler } from "./handlers/location"
 import { IntegrationHandler } from "./handlers/integration"
 import { CredentialHandler } from "./handlers/credential"
 import { ProjectCopyHandler } from "./handlers/project-copy"
+import { AutocompleteHandler } from "./handlers/autocomplete"
 
 export const handlers = Layer.mergeAll(
   HealthHandler,
@@ -31,6 +32,7 @@ export const handlers = Layer.mergeAll(
   PermissionHandler,
   FileSystemHandler,
   CommandHandler,
+  AutocompleteHandler,
   SkillHandler,
   EventHandler,
   PtyHandler,

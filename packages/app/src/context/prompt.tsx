@@ -34,6 +34,7 @@ export type {
   FileAttachmentPart,
   FileContextItem,
   ImageAttachmentPart,
+  PluginPart,
   Prompt,
   PromptModel,
   PromptStore,

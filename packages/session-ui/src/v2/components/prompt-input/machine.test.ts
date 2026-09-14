@@ -53,6 +53,45 @@ describe("prompt input v2 interaction machine", () => {
     expect(result.state.popover).toEqual({ type: "context", query: "sr" })
   })
 
+  test("opens plugin completion at the cursor", () => {
+    const value = "compare #ada with this"
+    const input = persisted(value)
+    input.cursor = 12
+    const result = transitionPromptInputV2(
+      createPromptInputV2InteractionState(),
+      {
+        type: "input.changed",
+        value,
+        persist: false,
+        providers: [{ id: "example.records", trigger: { value: "#", kind: "character" } }],
+      },
+      input,
+    )
+
+    expect(result.state.popover).toEqual({
+      type: "plugin",
+      providerID: "example.records",
+      trigger: "#",
+      query: "ada",
+    })
+  })
+
+  test("@ providers retain the built-in context popover", () => {
+    const value = "compare @ada"
+    const result = transitionPromptInputV2(
+      createPromptInputV2InteractionState(),
+      {
+        type: "input.changed",
+        value,
+        persist: false,
+        providers: [{ id: "example.records.mentions", trigger: { value: "@", kind: "character" } }],
+      },
+      persisted(value),
+    )
+    expect(result.state.popover).toEqual({ type: "context", query: "ada" })
+    expect(result.commands).toContainEqual({ type: "popover.filter", popover: "context", query: "ada" })
+  })
+
   test("enters shell mode from an initial exclamation mark", () => {
     const result = transitionPromptInputV2(
       createPromptInputV2InteractionState(),

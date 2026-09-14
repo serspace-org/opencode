@@ -24,6 +24,34 @@ function createPromptStore() {
 }
 
 describe("prompt input v2 store", () => {
+  test("replaces a complete mid-prompt prefix token independently of selected content", () => {
+    const prompt = createPromptStore()
+    prompt.setText("compare ::ada with this")
+    prompt.setCursor(12)
+    prompt.addMention(
+      {
+        type: "plugin",
+        providerID: "records",
+        entityType: "person",
+        entityID: "ada",
+        display: "Ada",
+        content: "Ada Lovelace",
+        metadata: { source: "test" },
+        start: 0,
+        end: 0,
+      },
+      "::",
+    )
+    expect(prompt.state.prompt.flatMap((part) => ("content" in part ? [part.content] : [])).join("")).toBe(
+      "compare Ada Lovelace with this",
+    )
+    expect(prompt.state.cursor).toBe(21)
+    const saved = JSON.parse(JSON.stringify(prompt.state.prompt))
+    prompt.reset()
+    prompt.setPrompt(saved, 21)
+    expect(prompt.state.prompt[1]).toMatchObject({ type: "plugin", entityID: "ada", metadata: { source: "test" } })
+  })
+
   test("accepts an accessor for the backing store", () => {
     const [state, setState] = createStore<PromptInputV2PersistedState>({
       prompt: [{ type: "text", content: "", start: 0, end: 0 }],

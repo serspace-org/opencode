@@ -2,7 +2,7 @@ import { getFilename } from "@opencode-ai/core/util/path"
 import { type AgentPartInput, type FilePartInput, type Part, type TextPartInput } from "@opencode-ai/sdk/v2/client"
 import type { FileSelection } from "@/context/file"
 import { encodeFilePath } from "@/context/file/path"
-import type { AgentPart, FileAttachmentPart, ImageAttachmentPart, Prompt } from "@/context/prompt"
+import type { AgentPart, FileAttachmentPart, ImageAttachmentPart, PluginPart, Prompt } from "@/context/prompt"
 import { Identifier } from "@/utils/id"
 import { createCommentMetadata, formatCommentNote } from "@/utils/comment-note"
 
@@ -51,6 +51,7 @@ const parseCommentMentions = (comment: string) => {
 
 const isFileAttachment = (part: Prompt[number]): part is FileAttachmentPart => part.type === "file"
 const isAgentAttachment = (part: Prompt[number]): part is AgentPart => part.type === "agent"
+const isPluginAttachment = (part: Prompt[number]): part is PluginPart => part.type === "plugin"
 
 const toOptimisticPart = (part: PromptRequestPart, sessionID: string, messageID: string): Part => {
   if (part.type === "text") {
@@ -142,6 +143,22 @@ export function buildRequestParts(input: BuildRequestPartsInput) {
     } satisfies PromptRequestPart
   })
 
+  const plugins = input.prompt.filter(isPluginAttachment).map((attachment) => ({
+    id: Identifier.ascending("part"),
+    type: "text" as const,
+    text: attachment.content,
+    synthetic: true,
+    metadata: {
+      autocomplete: {
+        providerID: attachment.providerID,
+        entityType: attachment.entityType,
+        entityID: attachment.entityID,
+        display: attachment.display,
+        metadata: attachment.metadata,
+      },
+    },
+  }))
+
   const used = new Set(files.map((part) => part.url))
   const context = input.context.flatMap((item) => {
     const path = absolute(input.sessionDirectory, item.path)
@@ -204,7 +221,7 @@ export function buildRequestParts(input: BuildRequestPartsInput) {
     } satisfies PromptRequestPart
   })
 
-  requestParts.push(...files, ...context, ...agents, ...images)
+  requestParts.push(...files, ...context, ...agents, ...plugins, ...images)
 
   return {
     requestParts,

@@ -281,6 +281,13 @@ function renderPromptInputV2Editor(editor: HTMLDivElement, prompt: PromptInputV2
       mention.dataset.mention =
         part.type === "file" && part.mime === "application/x-directory" ? "reference" : part.type
       if (part.type === "agent") mention.dataset.name = part.name
+      if (part.type === "plugin") {
+        mention.dataset.providerId = part.providerID
+        mention.dataset.entityType = part.entityType
+        mention.dataset.entityId = part.entityID
+        mention.dataset.display = part.display
+        if (part.metadata) mention.dataset.metadata = JSON.stringify(part.metadata)
+      }
       if (part.type === "file") {
         mention.dataset.path = part.path
         if (part.mime) mention.dataset.mime = part.mime
@@ -316,6 +323,21 @@ function parsePromptInputV2Editor(editor: HTMLDivElement) {
       parts.push({
         type: "agent",
         name: element.dataset.name ?? content.slice(1),
+        content,
+        start: position,
+        end: position + content.length,
+      })
+      position += content.length
+      return
+    }
+    if (element.dataset.mention === "plugin") {
+      parts.push({
+        type: "plugin",
+        providerID: element.dataset.providerId ?? "",
+        entityType: element.dataset.entityType ?? "",
+        entityID: element.dataset.entityId ?? "",
+        display: element.dataset.display ?? content,
+        ...(element.dataset.metadata ? { metadata: JSON.parse(element.dataset.metadata) as Record<string, string> } : {}),
         content,
         start: position,
         end: position + content.length,
