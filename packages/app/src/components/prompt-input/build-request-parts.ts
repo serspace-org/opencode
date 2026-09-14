@@ -146,7 +146,7 @@ export function buildRequestParts(input: BuildRequestPartsInput) {
   const plugins = input.prompt.filter(isPluginAttachment).map((attachment) => ({
     id: Identifier.ascending("part"),
     type: "text" as const,
-    text: "",
+    text: attachment.content,
     synthetic: true,
     metadata: {
       autocomplete: {

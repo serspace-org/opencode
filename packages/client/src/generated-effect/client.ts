@@ -723,7 +723,7 @@ const adaptClient = (raw: RawClient) => ({
   permissions: adaptGroup9(raw["server.permission"]),
   files: adaptGroup10(raw["server.fs"]),
   commands: adaptGroup11(raw["server.command"]),
-  "server.autocomplete": adaptGroup12(raw["server.autocomplete"]),
+  autocomplete: adaptGroup12(raw["server.autocomplete"]),
   skills: adaptGroup13(raw["server.skill"]),
   events: adaptGroup14(raw["server.event"]),
   ptys: adaptGroup15(raw["server.pty"]),

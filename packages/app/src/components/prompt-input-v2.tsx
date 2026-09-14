@@ -339,7 +339,7 @@ export function usePromptInputV2Controller(props: PromptInputV2ControllerProps):
       (
         await autocompleteRequest<Autocomplete.ProviderInfo[]>(
           `/api/autocomplete/providers?location[directory]=${encodeURIComponent(sdk().directory)}`,
-        )
+        ).catch(() => ({ data: [] }))
       ).data,
   )
   const variants = createMemo(() => ["default", ...props.controls.model.selection.variant.list()])
@@ -376,9 +376,7 @@ export function usePromptInputV2Controller(props: PromptInputV2ControllerProps):
         return result.data.items.map((item) => {
           const selection = item.selection
           const source =
-            selection.type === "context"
-              ? selection.source
-              : { providerID, entityType: "text", entityID: item.id }
+            selection.type === "context" ? selection.source : { providerID, entityType: "text", entityID: item.id }
           return {
             id: `plugin:${providerID}:${item.id}`,
             kind: "plugin" as const,

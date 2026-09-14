@@ -83,10 +83,10 @@ import type {
   FilesFindOutput,
   CommandsListInput,
   CommandsListOutput,
-  ServerAutocompleteProvidersInput,
-  ServerAutocompleteProvidersOutput,
-  ServerAutocompleteSearchInput,
-  ServerAutocompleteSearchOutput,
+  AutocompleteProvidersInput,
+  AutocompleteProvidersOutput,
+  AutocompleteSearchInput,
+  AutocompleteSearchOutput,
   SkillsListInput,
   SkillsListOutput,
   EventsSubscribeOutput,
@@ -798,9 +798,9 @@ export function make(options: ClientOptions) {
           requestOptions,
         ),
     },
-    "server.autocomplete": {
-      providers: (input?: ServerAutocompleteProvidersInput, requestOptions?: RequestOptions) =>
-        request<ServerAutocompleteProvidersOutput>(
+    autocomplete: {
+      providers: (input?: AutocompleteProvidersInput, requestOptions?: RequestOptions) =>
+        request<AutocompleteProvidersOutput>(
           {
             method: "GET",
             path: `/api/autocomplete/providers`,
@@ -811,8 +811,8 @@ export function make(options: ClientOptions) {
           },
           requestOptions,
         ),
-      search: (input: ServerAutocompleteSearchInput, requestOptions?: RequestOptions) =>
-        request<ServerAutocompleteSearchOutput>(
+      search: (input: AutocompleteSearchInput, requestOptions?: RequestOptions) =>
+        request<AutocompleteSearchOutput>(
           {
             method: "GET",
             path: `/api/autocomplete/search`,

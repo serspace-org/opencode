@@ -1,4 +1,5 @@
 import { createOpencodeClient } from "@opencode-ai/sdk/v2"
+import { OpenCode } from "@opencode-ai/client"
 import type { GlobalEvent } from "@opencode-ai/sdk/v2"
 import { Flag } from "@opencode-ai/core/flag/flag"
 import { createSimpleContext } from "./helper"
@@ -146,13 +147,8 @@ export const { use: useSDK, provider: SDKProvider } = createSimpleContext({
       event: emitter,
       fetch: props.fetch ?? fetch,
       url: props.url,
-      async request<T>(path: string, init?: RequestInit) {
-        const response = await (props.fetch ?? fetch)(new URL(path, props.url), {
-          ...init,
-          headers: { ...Object.fromEntries(new Headers(props.headers)), ...Object.fromEntries(new Headers(init?.headers)) },
-        })
-        if (!response.ok) throw new Error(`Request failed: ${response.status}`)
-        return response.json() as Promise<T>
+      get api() {
+        return OpenCode.make({ baseUrl: props.url, fetch: props.fetch, headers: props.headers })
       },
     }
   },

@@ -1,4 +1,4 @@
-import { createEffect, on, type Accessor } from "solid-js"
+import { createEffect, on, onCleanup, type Accessor } from "solid-js"
 import { createStore, reconcile } from "solid-js/store"
 import { useFilteredList } from "@opencode-ai/ui/hooks"
 import { createPromptInputV2Attachments, type PromptInputV2AttachmentConfig } from "./attachments"
@@ -140,10 +140,12 @@ export function createPromptInputV2Controller(input: {
   let autocompleteAbort: AbortController | undefined
   const pluginList = useFilteredList<PromptInputV2Suggestion>({
     items: async (query) => {
-      if (state.popover.type !== "plugin" || !input.autocomplete) return []
       autocompleteAbort?.abort()
+      if (state.popover.type !== "plugin" || !input.autocomplete) return []
       autocompleteAbort = new AbortController()
-      return input.autocomplete.search(state.popover.providerID, state.popover.trigger, query, autocompleteAbort.signal)
+      return input.autocomplete
+        .search(state.popover.providerID, state.popover.trigger, query, autocompleteAbort.signal)
+        .catch(() => [])
     },
     key: (item) => item.id,
     filterKeys: ["label"],
@@ -152,7 +154,8 @@ export function createPromptInputV2Controller(input: {
   })
   const list = () =>
     state.popover.type === "context" ? contextList : state.popover.type === "plugin" ? pluginList : commandList
-  const suggestions = () => list().flat()
+  onCleanup(() => autocompleteAbort?.abort())
+  const suggestions = () => (state.popover.type === "plugin" && pluginList.grouped.loading ? [] : list().flat())
 
   const execute = (command: PromptInputV2InteractionCommand) => {
     if (command.type === "draft.setText") {
@@ -160,7 +163,8 @@ export function createPromptInputV2Controller(input: {
       return
     }
     if (command.type === "mention.add") {
-      if (command.item.mention) draft.addMention(command.item.mention)
+      if (command.item.mention)
+        draft.addMention(command.item.mention, state.popover.type === "plugin" ? state.popover.trigger : "@")
       return
     }
     if (command.type === "popover.filter") {

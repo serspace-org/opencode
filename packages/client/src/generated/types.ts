@@ -2517,13 +2517,13 @@ export type CommandsListOutput = {
   }>
 }
 
-export type ServerAutocompleteProvidersInput = {
+export type AutocompleteProvidersInput = {
   readonly location?: {
     readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
   }["location"]
 }
 
-export type ServerAutocompleteProvidersOutput = {
+export type AutocompleteProvidersOutput = {
   readonly location: {
     readonly directory: string
     readonly workspaceID?: string
@@ -2540,7 +2540,7 @@ export type ServerAutocompleteProvidersOutput = {
   }>
 }
 
-export type ServerAutocompleteSearchInput = {
+export type AutocompleteSearchInput = {
   readonly location?: {
     readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
     readonly provider: string
@@ -2578,7 +2578,7 @@ export type ServerAutocompleteSearchInput = {
   }["sessionID"]
 }
 
-export type ServerAutocompleteSearchOutput = {
+export type AutocompleteSearchOutput = {
   readonly location: {
     readonly directory: string
     readonly workspaceID?: string

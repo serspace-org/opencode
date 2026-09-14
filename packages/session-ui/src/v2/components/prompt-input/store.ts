@@ -74,12 +74,13 @@ export function createPromptInputV2Store(input: PromptInputV2StoreInput) {
     removeContext(key: string) {
       setStore()("context", "items", (items) => items.filter((item) => item.key !== key))
     },
-    addMention(mention: PromptInputV2FilePart | PromptInputV2AgentPart | PromptInputV2PluginPart) {
+    addMention(mention: PromptInputV2FilePart | PromptInputV2AgentPart | PromptInputV2PluginPart, trigger = "@") {
       const text = store()
         .prompt.map((part) => ("content" in part ? part.content : ""))
         .join("")
-      const end = store().cursor ?? text.length
-      const start = text.slice(0, end).lastIndexOf(mention.content.slice(0, 1))
+      const cursor = store().cursor ?? text.length
+      const start = text.slice(0, cursor).lastIndexOf(trigger)
+      const end = mention.type === "plugin" ? cursor + (text.slice(cursor).match(/^\S*/)?.[0].length ?? 0) : cursor
       setStore()("prompt", insertMention(store().prompt, start < 0 ? end : start, end, mention))
       setStore()("cursor", (start < 0 ? end : start) + mention.content.length + 1)
     },
@@ -132,7 +133,7 @@ function insertMention(
     return [
       ...(before ? [{ type: "text" as const, content: before, start: 0, end: 0 }] : []),
       mention,
-      { type: "text" as const, content: ` ${after}`, start: 0, end: 0 },
+      { type: "text" as const, content: after.startsWith(" ") ? after : ` ${after}`, start: 0, end: 0 },
     ]
   })
   return withOffsets(parts)

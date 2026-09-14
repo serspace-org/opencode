@@ -25,6 +25,7 @@ import { layer as locationLayer } from "./location"
 import { sessionLocationLayer } from "./middleware/session-location"
 
 const applicationServices = LayerNode.group([
+  Autocomplete.node,
   Database.node,
   EventV2.node,
   httpClient,
@@ -59,7 +60,6 @@ function makeRoutes<AuthError, AuthServices>(auth: Layer.Layer<ServerAuth.Config
     Layer.provide(authorizationLayer),
     Layer.provide(schemaErrorLayer),
     Layer.provide(auth),
-    Layer.provide(Autocomplete.globalLayer),
     Layer.provide(serviceLayer),
   )
 }

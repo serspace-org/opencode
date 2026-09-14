@@ -51,10 +51,14 @@ const layer = Layer.effect(
         return () => initializers.delete(load)
       },
       registry(directory) {
-        const state = locations.get(directory) ?? { providers: new Map(), triggers: new Map() }
-        locations.set(directory, state)
         return {
           add(provider) {
+            Schema.decodeUnknownSync(Autocomplete.ProviderInfo)(provider.info)
+            if (["@", "/", "!"].includes(provider.info.trigger.value)) {
+              throw new Error(`Reserved autocomplete trigger: ${provider.info.trigger.value}`)
+            }
+            const state = locations.get(directory) ?? { providers: new Map(), triggers: new Map() }
+            locations.set(directory, state)
             if (state.providers.has(provider.info.id)) {
               throw new Error(`Duplicate autocomplete provider: ${provider.info.id}`)
             }
@@ -74,15 +78,22 @@ const layer = Layer.effect(
         }
       },
       providers: Effect.fn("Autocomplete.providers")(function* (directory) {
-        yield* Effect.all(Array.from(initializers, (initialize) => initialize(directory)), { discard: true })
+        yield* Effect.all(
+          Array.from(initializers, (initialize) => initialize(directory)),
+          { discard: true },
+        )
         return Array.from(locations.get(directory)?.providers.values() ?? [])
           .map((provider) => provider.info)
           .sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0) || a.id.localeCompare(b.id))
       }),
       search: Effect.fn("Autocomplete.search")(function* (input) {
-        yield* Effect.all(Array.from(initializers, (initialize) => initialize(input.directory)), { discard: true })
+        yield* Effect.all(
+          Array.from(initializers, (initialize) => initialize(input.directory)),
+          { discard: true },
+        )
         const provider = locations.get(input.directory)?.providers.get(input.providerID)
         if (!provider || provider.info.trigger.value !== input.trigger) return { items: [] }
+        // Bound interactive work even when a plugin ignores client-side cancellation.
         const result = yield* Effect.tryPromise({
           try: (signal) =>
             provider.search({
@@ -95,15 +106,14 @@ const layer = Layer.effect(
           catch: (error) => error,
         }).pipe(
           Effect.timeout("5 seconds"),
-          Effect.tapError((error) => Effect.logWarning("autocomplete provider failed", { providerID: input.providerID, error })),
+          Effect.tapError(() => Effect.logWarning("autocomplete provider failed", { providerID: input.providerID })),
           Effect.catch(() => Effect.succeed({ items: [] })),
         )
-        return yield* Schema.decodeUnknownEffect(Autocomplete.SearchResult)({
-          ...result,
-          items: result.items.slice(0, provider.info.maxResults ?? 20),
-        }).pipe(
-          Effect.tapError((error) =>
-            Effect.logWarning("autocomplete provider returned invalid results", { providerID: input.providerID, error }),
+        // Validate before accessing items: JavaScript plugins can return malformed values.
+        return yield* Schema.decodeUnknownEffect(Autocomplete.SearchResult)(result).pipe(
+          Effect.map((result) => ({ ...result, items: result.items.slice(0, provider.info.maxResults ?? 20) })),
+          Effect.tapError(() =>
+            Effect.logWarning("autocomplete provider returned invalid results", { providerID: input.providerID }),
           ),
           Effect.catch(() => Effect.succeed({ items: [] })),
         )

@@ -50,6 +50,7 @@ describe("buildRequestParts", () => {
         (part) =>
           part.type === "text" &&
           part.synthetic &&
+          part.text === "#Ada Lovelace" &&
           (part.metadata?.autocomplete as { entityID?: string } | undefined)?.entityID === "person_ada",
       ),
     ).toBe(true)

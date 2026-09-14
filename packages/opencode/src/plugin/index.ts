@@ -178,9 +178,7 @@ const layer = Layer.effect(
             Effect.tapError((error) => Effect.logError("failed to load internal plugin", { name: plugin.name, error })),
             Effect.option,
           )
-          if (init._tag === "Some") {
-            hooks.push(init.value)
-          }
+          if (init._tag === "Some") hooks.push(init.value)
         }
 
         const plugins = flags.pure ? [] : (cfg.plugin_origins ?? [])
@@ -246,19 +244,25 @@ const layer = Layer.effect(
           )
         }
 
-        hooks.forEach((hook) => {
-          if (!hook.autocomplete) return
-          hook.autocomplete.register({
-            add: (provider) => {
-              const dispose = autocomplete.registry(ctx.directory).add(provider)
-              autocompleteDisposers.push(dispose)
-              return dispose
-            },
-          })
-        })
+        // Install cleanup before invoking plugin code, including partially successful registrations.
+        yield* Effect.addFinalizer(() => Effect.sync(() => autocompleteDisposers.forEach((dispose) => dispose())))
 
         // Notify plugins of current config
         for (const hook of hooks) {
+          yield* Effect.try({
+            try: () =>
+              hook.autocomplete?.register({
+                add: (provider) => {
+                  const dispose = autocomplete.registry(ctx.directory).add(provider)
+                  autocompleteDisposers.push(dispose)
+                  return dispose
+                },
+              }),
+            catch: () => "autocomplete registration failed",
+          }).pipe(
+            Effect.tapError(() => Effect.logWarning("plugin autocomplete registration failed")),
+            Effect.ignore,
+          )
           yield* Effect.tryPromise({
             try: () => Promise.resolve((hook as any).config?.(cfg)),
             catch: errorMessage,
@@ -293,11 +297,10 @@ const layer = Layer.effect(
           ),
         )
 
-        yield* Effect.addFinalizer(() => Effect.sync(() => autocompleteDisposers.forEach((dispose) => dispose())))
-
         return { hooks }
       }),
     )
+
     const trigger = Effect.fn("Plugin.trigger")(function* <
       Name extends TriggerName,
       Input = Parameters<Required<Hooks>[Name]>[0],

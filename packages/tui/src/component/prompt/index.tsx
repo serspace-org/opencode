@@ -1035,7 +1035,7 @@ export function Prompt(props: PromptProps) {
 
     const autocompleteParts = store.prompt.parts.flatMap((part) =>
       part.type === "text" && part.metadata?.autocomplete
-        ? [{ ...part, text: "", source: undefined, synthetic: true }]
+        ? [{ ...part, source: undefined, synthetic: true }]
         : [],
     )
 

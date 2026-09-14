@@ -1,4 +1,4 @@
-import type { Plugin } from "./index.js"
+import type { Plugin } from "../src/index.js"
 
 const records = [
   { id: "person_ada", type: "person", name: "Ada Lovelace" },

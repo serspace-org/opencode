@@ -23,11 +23,7 @@ import { useFrecency } from "../../prompt/frecency"
 import { useBindings, useCommandSlashes, useOpencodeModeStack } from "../../keymap"
 import { displayCharAt, mentionTriggerIndex, promptTriggerIndex } from "../../prompt/display"
 import type { FileSystemEntry } from "@opencode-ai/sdk/v2"
-import type {
-  AutocompleteProviderInfo,
-  AutocompleteSearchResult,
-  AutocompleteSelection,
-} from "@opencode-ai/plugin"
+import type { AutocompleteProviderInfo, AutocompleteSelection } from "@opencode-ai/plugin"
 
 function removeLineRange(input: string) {
   const hashIndex = input.lastIndexOf("#")
@@ -155,10 +151,12 @@ export function Autocomplete(props: {
     // Track props.value to make memo reactive to text changes
     props.value // <- there surely is a better way to do this, like making .input() reactive
 
-    return props.input().getTextRange(
-      store.index + Bun.stringWidth(store.visible === "plugin" ? store.trigger : String(store.visible)),
-      props.input().cursorOffset,
-    )
+    return props
+      .input()
+      .getTextRange(
+        store.index + Bun.stringWidth(store.visible === "plugin" ? store.trigger : String(store.visible)),
+        props.input().cursorOffset,
+      )
   })
 
   // filter() reads reactive props.value plus non-reactive cursor/text state.
@@ -275,12 +273,11 @@ export function Autocomplete(props: {
     }),
     async (current) =>
       (
-        await sdk.request<{ data: AutocompleteProviderInfo[] }>(
-          `/api/autocomplete/providers?${new URLSearchParams({
-            "location[directory]": current.directory,
-            ...(current.workspaceID ? { "location[workspace]": current.workspaceID } : {}),
-          })}`,
-        ).catch(() => ({ data: [] }))
+        await sdk.api.autocomplete
+          .providers({
+            location: { directory: current.directory, workspace: current.workspaceID },
+          })
+          .catch(() => ({ data: [] }))
       ).data,
     { initialValue: [] },
   )
@@ -295,18 +292,22 @@ export function Autocomplete(props: {
     async (input) => {
       pluginAbort?.abort()
       pluginAbort = new AbortController()
-      const params = new URLSearchParams({
-        "location[directory]": input.location?.directory ?? sync.path.directory,
-        ...(input.location?.workspaceID ? { "location[workspace]": input.location.workspaceID } : {}),
-        provider: input.providerID,
-        trigger: input.trigger,
-        query: input.query,
-        ...(props.sessionID ? { sessionID: props.sessionID } : {}),
-      })
-      const result = await sdk
-        .request<{ data: AutocompleteSearchResult }>(`/api/autocomplete/search?${params}`, {
-          signal: pluginAbort.signal,
-        })
+      const result = await sdk.api.autocomplete
+        .search(
+          {
+            location: {
+              directory: input.location?.directory ?? sync.path.directory,
+              workspace: input.location?.workspaceID,
+            },
+            provider: input.providerID,
+            trigger: input.trigger,
+            query: input.query,
+            ...(props.sessionID ? { sessionID: props.sessionID } : {}),
+          },
+          {
+            signal: pluginAbort.signal,
+          },
+        )
         .catch(() => ({ data: { items: [] } }))
       return result.data.items.map(
         (item): AutocompleteOption => ({
@@ -561,7 +562,7 @@ export function Autocomplete(props: {
     const commandsValue = commands()
     const searchValue = search()
 
-    if (store.visible === "plugin") return pluginOptions()
+    if (store.visible === "plugin") return pluginOptions.loading ? [] : pluginOptions()
 
     if (store.visible === "@" && referenceMatchValue) {
       return referenceAliasesValue.filter((item) => item.display === `@${referenceMatchValue.name}`)
