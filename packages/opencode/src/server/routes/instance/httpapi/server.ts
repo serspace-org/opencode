@@ -67,6 +67,7 @@ import { SessionV2 } from "@opencode-ai/core/session"
 import { SessionExecution } from "@opencode-ai/core/session/execution"
 import * as SessionExecutionLocal from "@opencode-ai/core/session/execution/local"
 import { lazy } from "@/util/lazy"
+import { Autocomplete } from "@opencode-ai/core/autocomplete"
 import { CorsConfig, isAllowedCorsOrigin, type CorsOptions } from "@opencode-ai/server/cors"
 import { serveUIEffect } from "@/server/shared/ui"
 import { ServerAuth } from "@/server/auth"
@@ -220,6 +221,7 @@ const app = LayerNode.group([
   Git.node,
   Ripgrep.node,
   Storage.node,
+  Autocomplete.node,
   Snapshot.node,
   Plugin.node,
   ModelsDev.node,

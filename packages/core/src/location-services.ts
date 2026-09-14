@@ -1,6 +1,5 @@
 import { Effect, Layer, LayerMap } from "effect"
 import { AgentV2 } from "./agent"
-import { Autocomplete } from "./autocomplete"
 import { AISDK } from "./aisdk"
 import { Catalog } from "./catalog"
 import { CommandV2 } from "./command"
@@ -42,7 +41,6 @@ export { LocationServiceMap } from "./location-service-map"
 
 export const locationServices = LayerNode.group([
   Location.node,
-  Autocomplete.node,
   Policy.node,
   Config.node,
   AgentV2.node,

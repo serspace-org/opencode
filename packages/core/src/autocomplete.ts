@@ -1,9 +1,8 @@
 export * as Autocomplete from "./autocomplete"
 
-import { makeLocationNode } from "./effect/app-node"
+import { makeGlobalNode } from "./effect/app-node"
 import { Context, Effect, Layer, Schema } from "effect"
 import { Autocomplete } from "@opencode-ai/schema/autocomplete"
-import { Location } from "./location"
 
 export type SearchInput = {
   providerID: string
@@ -25,9 +24,12 @@ export type Registry = {
 }
 
 export interface Interface {
-  readonly registry: Registry
-  readonly providers: () => Effect.Effect<Autocomplete.ProviderInfo[]>
+  readonly initialize: (load: () => Effect.Effect<void>) => () => void
+  readonly registry: (directory: string) => Registry
+  readonly providers: (directory: string) => Effect.Effect<Autocomplete.ProviderInfo[]>
   readonly search: (input: {
+    directory: string
+    workspaceID?: string
     providerID: string
     trigger: string
     query: string
@@ -40,33 +42,46 @@ export class Service extends Context.Service<Service, Interface>()("@opencode/Au
 const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
-    const location = yield* Location.Service
-    const providers = new Map<string, Provider>()
-    const triggers = new Map<string, string>()
-    const registry: Registry = {
-      add(provider) {
-        if (providers.has(provider.info.id)) throw new Error(`Duplicate autocomplete provider: ${provider.info.id}`)
-        const owner = triggers.get(provider.info.trigger.value)
-        if (owner) throw new Error(`Autocomplete trigger ${provider.info.trigger.value} is already registered by ${owner}`)
-        providers.set(provider.info.id, provider)
-        triggers.set(provider.info.trigger.value, provider.info.id)
-        return () => {
-          if (providers.get(provider.info.id) !== provider) return
-          providers.delete(provider.info.id)
-          triggers.delete(provider.info.trigger.value)
-        }
-      },
-    }
+    const locations = new Map<string, { providers: Map<string, Provider>; triggers: Map<string, string> }>()
+    const initializers = new Set<() => Effect.Effect<void>>()
 
     return Service.of({
-      registry,
-      providers: Effect.fn("Autocomplete.providers")(function* () {
-        return Array.from(providers.values())
+      initialize(load) {
+        initializers.add(load)
+        return () => initializers.delete(load)
+      },
+      registry(directory) {
+        const state = locations.get(directory) ?? { providers: new Map(), triggers: new Map() }
+        locations.set(directory, state)
+        return {
+          add(provider) {
+            if (state.providers.has(provider.info.id)) {
+              throw new Error(`Duplicate autocomplete provider: ${provider.info.id}`)
+            }
+            const owner = state.triggers.get(provider.info.trigger.value)
+            if (owner) {
+              throw new Error(`Autocomplete trigger ${provider.info.trigger.value} is already registered by ${owner}`)
+            }
+            state.providers.set(provider.info.id, provider)
+            state.triggers.set(provider.info.trigger.value, provider.info.id)
+            return () => {
+              if (state.providers.get(provider.info.id) !== provider) return
+              state.providers.delete(provider.info.id)
+              state.triggers.delete(provider.info.trigger.value)
+              if (state.providers.size === 0) locations.delete(directory)
+            }
+          },
+        }
+      },
+      providers: Effect.fn("Autocomplete.providers")(function* (directory) {
+        yield* Effect.all(Array.from(initializers, (initialize) => initialize()), { discard: true })
+        return Array.from(locations.get(directory)?.providers.values() ?? [])
           .map((provider) => provider.info)
           .sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0) || a.id.localeCompare(b.id))
       }),
       search: Effect.fn("Autocomplete.search")(function* (input) {
-        const provider = providers.get(input.providerID)
+        yield* Effect.all(Array.from(initializers, (initialize) => initialize()), { discard: true })
+        const provider = locations.get(input.directory)?.providers.get(input.providerID)
         if (!provider || provider.info.trigger.value !== input.trigger) return { items: [] }
         const result = yield* Effect.tryPromise({
           try: (signal) =>
@@ -74,8 +89,8 @@ const layer = Layer.effect(
               ...input,
               signal,
               query: input.query.slice(0, 500),
-              directory: location.directory,
-              workspaceID: location.workspaceID,
+              directory: input.directory,
+              workspaceID: input.workspaceID,
             }),
           catch: (error) => error,
         }).pipe(
@@ -97,5 +112,5 @@ const layer = Layer.effect(
   }),
 )
 
-export const locationLayer = layer
-export const node = makeLocationNode({ service: Service, layer, deps: [Location.node] })
+export const globalLayer = layer
+export const node = makeGlobalNode({ service: Service, layer, deps: [] })

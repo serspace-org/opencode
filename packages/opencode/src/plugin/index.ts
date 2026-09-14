@@ -34,9 +34,6 @@ import { RuntimeFlags } from "@/effect/runtime-flags"
 import { EventV2Bridge } from "@/event-v2-bridge"
 import { InstallationChannel } from "@opencode-ai/core/installation/version"
 import { Autocomplete } from "@opencode-ai/core/autocomplete"
-import { LocationServiceMap, locationServiceMapLayer } from "@opencode-ai/core/location-services"
-import { Location } from "@opencode-ai/core/location"
-import { AbsolutePath } from "@opencode-ai/core/schema"
 
 type State = {
   hooks: Hooks[]
@@ -134,16 +131,13 @@ const layer = Layer.effect(
     const events = yield* EventV2Bridge.Service
     const config = yield* Config.Service
     const flags = yield* RuntimeFlags.Service
-    const locations = yield* LocationServiceMap.Service
+    const autocomplete = yield* Autocomplete.Service
 
     const state = yield* InstanceState.make<State>(
       Effect.fn("Plugin.state")(function* (ctx) {
         const hooks: Hooks[] = []
         const autocompleteDisposers: Array<() => void> = []
         const bridge = yield* EffectBridge.make()
-        const autocomplete = yield* Autocomplete.Service.pipe(
-          Effect.provide(locations.get(Location.Ref.make({ directory: AbsolutePath.make(ctx.directory) }))),
-        )
 
         function publishPluginError(message: string) {
           bridge.fork(events.publish(Session.Event.Error, { error: new NamedError.Unknown({ message }).toObject() }))
@@ -256,7 +250,7 @@ const layer = Layer.effect(
           if (!hook.autocomplete) return
           hook.autocomplete.register({
             add: (provider) => {
-              const dispose = autocomplete.registry.add(provider)
+              const dispose = autocomplete.registry(ctx.directory).add(provider)
               autocompleteDisposers.push(dispose)
               return dispose
             },
@@ -304,6 +298,10 @@ const layer = Layer.effect(
         return { hooks }
       }),
     )
+    yield* Effect.acquireRelease(
+      Effect.sync(() => autocomplete.initialize(() => InstanceState.get(state).pipe(Effect.asVoid))),
+      (dispose) => Effect.sync(dispose),
+    )
 
     const trigger = Effect.fn("Plugin.trigger")(function* <
       Name extends TriggerName,
@@ -333,16 +331,10 @@ const layer = Layer.effect(
   }),
 )
 
-const locationServiceMapNode = LayerNode.make({
-  service: LocationServiceMap.Service,
-  layer: locationServiceMapLayer,
-  deps: [],
-})
-
 export const node = LayerNode.make({
   service: Service,
   layer: layer,
-  deps: [EventV2Bridge.node, Config.node, RuntimeFlags.node, locationServiceMapNode],
+  deps: [EventV2Bridge.node, Config.node, RuntimeFlags.node, Autocomplete.node],
 })
 
 export * as Plugin from "."
