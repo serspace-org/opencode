@@ -1,3 +1,4 @@
+import { Autocomplete } from "@opencode-ai/core/autocomplete"
 import { Database } from "@opencode-ai/core/database/database"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { httpClient } from "@opencode-ai/core/effect/app-node-platform"
@@ -58,6 +59,7 @@ function makeRoutes<AuthError, AuthServices>(auth: Layer.Layer<ServerAuth.Config
     Layer.provide(authorizationLayer),
     Layer.provide(schemaErrorLayer),
     Layer.provide(auth),
+    Layer.provide(Autocomplete.globalLayer),
     Layer.provide(serviceLayer),
   )
 }
