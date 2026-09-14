@@ -62,7 +62,6 @@ import { ProjectV2 } from "@opencode-ai/core/project"
 import { ProjectCopy } from "@opencode-ai/core/project/copy"
 import { PtyTicket } from "@opencode-ai/core/pty/ticket"
 import { Ripgrep } from "@opencode-ai/core/ripgrep"
-import { Autocomplete } from "@opencode-ai/core/autocomplete"
 import { SessionProjector } from "@opencode-ai/core/session/projector"
 import { SessionV2 } from "@opencode-ai/core/session"
 import { SessionExecution } from "@opencode-ai/core/session/execution"
@@ -223,7 +222,6 @@ const app = LayerNode.group([
   Storage.node,
   Snapshot.node,
   Plugin.node,
-  Autocomplete.node,
   ModelsDev.node,
   Provider.node,
   ProviderAuth.node,
