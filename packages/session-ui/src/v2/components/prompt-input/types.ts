@@ -113,6 +113,7 @@ export type PromptInputV2Suggestion = {
   path?: string
   keybind?: string[]
   recent?: boolean
+  priority?: number
   group?: string
   mention?: PromptInputV2FilePart | PromptInputV2AgentPart | PromptInputV2PluginPart
 }

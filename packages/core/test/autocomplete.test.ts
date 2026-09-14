@@ -11,6 +11,22 @@ const run = <A>(effect: Effect.Effect<A, never, Autocomplete.Service>) =>
   Effect.runPromise(effect.pipe(Effect.provide(Autocomplete.globalLayer)))
 
 describe("autocomplete registry", () => {
+  test("multiple @ providers coexist and dispose independently", async () => {
+    await run(
+      Effect.gen(function* () {
+        const autocomplete = yield* Autocomplete.Service
+        const registry = autocomplete.registry("/tmp/one")
+        const dispose = registry.add(provider("one", "@"))
+        registry.add(provider("two", "@"))
+        registry.add(provider("dedicated", "#"))
+        expect((yield* autocomplete.providers("/tmp/one")).map((item) => item.id)).toEqual(["dedicated", "one", "two"])
+        dispose()
+        expect((yield* autocomplete.providers("/tmp/one")).map((item) => item.id)).toEqual(["dedicated", "two"])
+        expect(() => registry.add(provider("two", "@"))).toThrow("Duplicate")
+      }),
+    )
+  })
+
   test("interrupting search aborts the provider signal", async () => {
     await run(
       Effect.gen(function* () {
@@ -75,7 +91,7 @@ describe("autocomplete registry", () => {
       Effect.gen(function* () {
         const autocomplete = yield* Autocomplete.Service
         const registry = autocomplete.registry("/tmp/one")
-        expect(() => registry.add(provider("builtin", "@"))).toThrow("Reserved")
+        expect(() => registry.add(provider("builtin", "/"))).toThrow("Reserved")
         expect(() =>
           registry.add({ ...provider("invalid", "#"), info: { ...provider("invalid", "#").info, maxResults: -1 } }),
         ).toThrow()

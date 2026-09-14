@@ -54,7 +54,7 @@ const layer = Layer.effect(
         return {
           add(provider) {
             Schema.decodeUnknownSync(Autocomplete.ProviderInfo)(provider.info)
-            if (["@", "/", "!"].includes(provider.info.trigger.value)) {
+            if (["/", "!"].includes(provider.info.trigger.value)) {
               throw new Error(`Reserved autocomplete trigger: ${provider.info.trigger.value}`)
             }
             const state = locations.get(directory) ?? { providers: new Map(), triggers: new Map() }
@@ -67,7 +67,8 @@ const layer = Layer.effect(
               throw new Error(`Autocomplete trigger ${provider.info.trigger.value} is already registered by ${owner}`)
             }
             state.providers.set(provider.info.id, provider)
-            state.triggers.set(provider.info.trigger.value, provider.info.id)
+            // @ providers extend the built-in list and may share the trigger.
+            if (provider.info.trigger.value !== "@") state.triggers.set(provider.info.trigger.value, provider.info.id)
             return () => {
               if (state.providers.get(provider.info.id) !== provider) return
               state.providers.delete(provider.info.id)

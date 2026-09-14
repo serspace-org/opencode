@@ -374,6 +374,8 @@ export function usePromptInputV2Controller(props: PromptInputV2ControllerProps):
           signal,
         )
         return result.data.items.map((item) => {
+          const provider = autocompleteProviders()?.find((provider) => provider.id === providerID)
+          const title = provider?.title ?? providerID
           const selection = item.selection
           const source =
             selection.type === "context" ? selection.source : { providerID, entityType: "text", entityID: item.id }
@@ -381,8 +383,9 @@ export function usePromptInputV2Controller(props: PromptInputV2ControllerProps):
             id: `plugin:${providerID}:${item.id}`,
             kind: "plugin" as const,
             label: item.label,
-            description: item.description,
-            group: item.group,
+            description: [title, item.description].filter(Boolean).join(" · "),
+            group: title,
+            priority: provider?.priority,
             mention: {
               type: "plugin" as const,
               providerID: source.providerID,

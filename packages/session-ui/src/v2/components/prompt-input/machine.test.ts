@@ -76,6 +76,22 @@ describe("prompt input v2 interaction machine", () => {
     })
   })
 
+  test("@ providers retain the built-in context popover", () => {
+    const value = "compare @ada"
+    const result = transitionPromptInputV2(
+      createPromptInputV2InteractionState(),
+      {
+        type: "input.changed",
+        value,
+        persist: false,
+        providers: [{ id: "example.records.mentions", trigger: { value: "@", kind: "character" } }],
+      },
+      persisted(value),
+    )
+    expect(result.state.popover).toEqual({ type: "context", query: "ada" })
+    expect(result.commands).toContainEqual({ type: "popover.filter", popover: "context", query: "ada" })
+  })
+
   test("enters shell mode from an initial exclamation mark", () => {
     const result = transitionPromptInputV2(
       createPromptInputV2InteractionState(),

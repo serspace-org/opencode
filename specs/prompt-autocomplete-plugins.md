@@ -6,7 +6,12 @@ Fork prototype for design review; upstream approval has not been obtained.
 
 - Server plugins register providers through `Hooks.autocomplete.register`.
   Each provider owns an ID, a token-boundary trigger, and asynchronous search.
-  Built-in `@`, `/`, and `!` triggers are reserved. Duplicate registrations fail;
+  `@` providers extend built-in suggestions and may share that trigger; `/`
+  and `!` remain reserved. Other triggers and provider IDs must be unique.
+  Providers register separate IDs for each binding, so a plugin can offer both
+  a dedicated `#` search and additive `@` results without a new wire contract.
+  Provider titles label the source in both composers; selected metadata retains
+  the registered provider ID and stable entity identity. Duplicate registrations fail;
   a failed plugin registration is logged without stopping other plugin hooks.
 - Discovery and search use `/api/autocomplete`. TUI uses the generated client.
   The app retains its existing request adapter because its other APIs use a
@@ -44,7 +49,11 @@ isolation and third-party authorization remain host/provider responsibilities.
 
 The local example lives in `packages/plugin/examples/autocomplete.ts`; it is
 not a public package export. Add its file path to the plugin configuration and
-type `#` to exercise discovery before creating a session.
+type `#` to exercise discovery before creating a session. Type `@ada` to see
+the same records alongside built-in matches, labeled `Example records · person`.
+The example sets `info.priority: 100` so its records appear above built-in
+suggestions once available. Built-ins and providers without an explicit priority
+use zero; equal-priority results retain their existing order.
 
 Regression coverage includes registration validation, disposal/re-registration,
 directory isolation, malformed results, provider exceptions, token replacement

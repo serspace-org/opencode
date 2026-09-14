@@ -64,6 +64,7 @@ export type AutocompleteRef = {
 
 export type AutocompleteOption = {
   display: string
+  priority?: number
   value?: string
   aliases?: string[]
   disabled?: boolean
@@ -247,9 +248,9 @@ export function Autocomplete(props: {
     }
   }
 
-  function insertPluginSelection(selection: AutocompleteSelection) {
+  function insertPluginSelection(selection: AutocompleteSelection, providerID: string, trigger: string) {
     const content = selection.type === "context" ? selection.content : selection.text
-    const text = content.startsWith(store.trigger) ? content.slice(store.trigger.length) : content
+    const text = content.startsWith(trigger) ? content.slice(trigger.length) : content
     insertPart(
       text,
       {
@@ -259,10 +260,10 @@ export function Autocomplete(props: {
         metadata:
           selection.type === "context"
             ? { autocomplete: { ...selection.source, display: selection.display } }
-            : { autocomplete: { providerID: store.providerID, type: "text" } },
+            : { autocomplete: { providerID, type: "text" } },
         source: { text: { start: 0, end: 0, value: "" } },
       },
-      content.startsWith(store.trigger) ? store.trigger : "",
+      content.startsWith(trigger) ? trigger : "",
     )
   }
 
@@ -286,36 +287,50 @@ export function Autocomplete(props: {
   onCleanup(() => pluginAbort?.abort())
   const [pluginOptions] = createResource(
     () =>
-      store.visible === "plugin"
-        ? { providerID: store.providerID, trigger: store.trigger, query: search(), location: location() }
+      store.visible === "plugin" || store.visible === "@"
+        ? {
+            providers: providers().filter((provider) =>
+              store.visible === "@" ? provider.trigger.value === "@" : provider.id === store.providerID,
+            ),
+            query: search(),
+            location: location(),
+          }
         : undefined,
     async (input) => {
       pluginAbort?.abort()
       pluginAbort = new AbortController()
-      const result = await sdk.api.autocomplete
-        .search(
-          {
-            location: {
-              directory: input.location?.directory ?? sync.path.directory,
-              workspace: input.location?.workspaceID,
-            },
-            provider: input.providerID,
-            trigger: input.trigger,
-            query: input.query,
-            ...(props.sessionID ? { sessionID: props.sessionID } : {}),
-          },
-          {
-            signal: pluginAbort.signal,
-          },
+      const signal = pluginAbort.signal
+      return (
+        await Promise.all(
+          input.providers.map(async (provider) => {
+            const result = await sdk.api.autocomplete
+              .search(
+                {
+                  location: {
+                    directory: input.location?.directory ?? sync.path.directory,
+                    workspace: input.location?.workspaceID,
+                  },
+                  provider: provider.id,
+                  trigger: provider.trigger.value,
+                  query: input.query,
+                  ...(props.sessionID ? { sessionID: props.sessionID } : {}),
+                },
+                {
+                  signal,
+                },
+              )
+              .catch(() => ({ data: { items: [] } }))
+            return result.data.items.map(
+              (item): AutocompleteOption => ({
+                display: item.label,
+                description: [provider.title, item.description].filter(Boolean).join(" · "),
+                priority: provider.priority,
+                onSelect: () => insertPluginSelection(item.selection, provider.id, provider.trigger.value),
+              }),
+            )
+          }),
         )
-        .catch(() => ({ data: { items: [] } }))
-      return result.data.items.map(
-        (item): AutocompleteOption => ({
-          display: item.label,
-          description: item.description,
-          onSelect: () => insertPluginSelection(item.selection),
-        }),
-      )
+      ).flat()
     },
     { initialValue: [] },
   )
@@ -554,7 +569,7 @@ export function Autocomplete(props: {
     }))
   })
 
-  const options = createMemo((prev: AutocompleteOption[] | undefined) => {
+  const builtins = createMemo((prev: AutocompleteOption[] | undefined) => {
     const filesValue = files()
     const referenceMatchValue = referenceMatch()
     const agentsValue = agents()
@@ -562,7 +577,7 @@ export function Autocomplete(props: {
     const commandsValue = commands()
     const searchValue = search()
 
-    if (store.visible === "plugin") return pluginOptions.loading ? [] : pluginOptions()
+    if (store.visible === "plugin") return []
 
     if (store.visible === "@" && referenceMatchValue) {
       return referenceAliasesValue.filter((item) => item.display === `@${referenceMatchValue.name}`)
@@ -606,6 +621,13 @@ export function Autocomplete(props: {
 
     return [...fuzziedNonFiles, ...fileOptions].slice(0, 10)
   })
+
+  const options = createMemo(() =>
+    [
+      ...builtins(),
+      ...(store.visible === "@" || store.visible === "plugin" ? (pluginOptions.loading ? [] : pluginOptions()) : []),
+    ].sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0)),
+  )
 
   createEffect(() => {
     filter()

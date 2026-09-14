@@ -139,13 +139,24 @@ export function createPromptInputV2Controller(input: {
   })
   let autocompleteAbort: AbortController | undefined
   const pluginList = useFilteredList<PromptInputV2Suggestion>({
-    items: async (query) => {
+    items: async () => {
       autocompleteAbort?.abort()
-      if (state.popover.type !== "plugin" || !input.autocomplete) return []
+      const autocomplete = input.autocomplete
+      if (!autocomplete || (state.popover.type !== "plugin" && state.popover.type !== "context")) return []
       autocompleteAbort = new AbortController()
-      return input.autocomplete
-        .search(state.popover.providerID, state.popover.trigger, query, autocompleteAbort.signal)
-        .catch(() => [])
+      const signal = autocompleteAbort.signal
+      const providers =
+        state.popover.type === "context"
+          ? autocomplete.providers().filter((provider) => provider.trigger.value === "@")
+          : [{ id: state.popover.providerID, trigger: { value: state.popover.trigger } }]
+      const search = state.popover.query
+      return (
+        await Promise.all(
+          providers.map((provider) =>
+            autocomplete.search(provider.id, provider.trigger.value, search, signal).catch(() => []),
+          ),
+        )
+      ).flat()
     },
     key: (item) => item.id,
     filterKeys: ["label"],
@@ -155,7 +166,13 @@ export function createPromptInputV2Controller(input: {
   const list = () =>
     state.popover.type === "context" ? contextList : state.popover.type === "plugin" ? pluginList : commandList
   onCleanup(() => autocompleteAbort?.abort())
-  const suggestions = () => (state.popover.type === "plugin" && pluginList.grouped.loading ? [] : list().flat())
+  const suggestions = () => {
+    const plugins = pluginList.grouped.loading ? [] : pluginList.flat()
+    if (state.popover.type === "context")
+      return [...contextList.flat(), ...plugins].sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0))
+    if (state.popover.type === "plugin") return plugins
+    return list().flat()
+  }
 
   const execute = (command: PromptInputV2InteractionCommand) => {
     if (command.type === "draft.setText") {
