@@ -91,6 +91,21 @@ export type AutocompleteSelection =
       }
     }
 
+export type AutocompleteItem = {
+  id: string
+  label: string
+  description?: string
+  group?: string
+  icon?: string
+  detail?: string
+  selection: AutocompleteSelection
+}
+
+export type AutocompleteSearchResult = {
+  items: AutocompleteItem[]
+  stale?: boolean
+}
+
 export type AutocompleteProvider = {
   info: AutocompleteProviderInfo
   search(input: {
@@ -101,18 +116,7 @@ export type AutocompleteProvider = {
     workspaceID?: string
     sessionID?: string
     signal: AbortSignal
-  }): Promise<{
-    items: Array<{
-      id: string
-      label: string
-      description?: string
-      group?: string
-      icon?: string
-      detail?: string
-      selection: AutocompleteSelection
-    }>
-    stale?: boolean
-  }>
+  }): Promise<AutocompleteSearchResult>
 }
 
 export type AutocompleteRegistry = {

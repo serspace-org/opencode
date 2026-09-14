@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { displayCharAt, displaySlice, mentionTriggerIndex } from "../../src/prompt/display"
+import { displayCharAt, displaySlice, mentionTriggerIndex, promptTriggerIndex } from "../../src/prompt/display"
 
 describe("prompt display", () => {
   test("uses display-width offsets for mentions", () => {
@@ -29,5 +29,21 @@ describe("prompt display", () => {
     expect(mentionTriggerIndex("hello@")).toBeUndefined()
     expect(mentionTriggerIndex("foo@bar.com")).toBeUndefined()
     expect(mentionTriggerIndex("中文 @src file")).toBeUndefined()
+  })
+})
+
+describe("promptTriggerIndex", () => {
+  test("finds a provider trigger at a token boundary", () => {
+    expect(promptTriggerIndex("compare #ada", "#")).toBe(8)
+    expect(promptTriggerIndex("#ada first", "#", 4)).toBe(0)
+  })
+
+  test("ignores triggers embedded in words or followed by whitespace", () => {
+    expect(promptTriggerIndex("issue#ada", "#")).toBeUndefined()
+    expect(promptTriggerIndex("compare #ada later", "#")).toBeUndefined()
+  })
+
+  test("supports prefix triggers and display-width offsets", () => {
+    expect(promptTriggerIndex("界 ::ada", "::")).toBe(3)
   })
 })

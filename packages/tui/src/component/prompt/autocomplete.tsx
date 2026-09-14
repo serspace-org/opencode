@@ -21,8 +21,13 @@ import { Locale } from "../../util/locale"
 import type { PromptInfo } from "../../prompt/history"
 import { useFrecency } from "../../prompt/frecency"
 import { useBindings, useCommandSlashes, useOpencodeModeStack } from "../../keymap"
-import { displayCharAt, mentionTriggerIndex } from "../../prompt/display"
+import { displayCharAt, mentionTriggerIndex, promptTriggerIndex } from "../../prompt/display"
 import type { FileSystemEntry } from "@opencode-ai/sdk/v2"
+import type {
+  AutocompleteProviderInfo,
+  AutocompleteSearchResult,
+  AutocompleteSelection,
+} from "@opencode-ai/plugin"
 
 function removeLineRange(input: string) {
   const hashIndex = input.lastIndexOf("#")
@@ -58,7 +63,7 @@ function extractLineRange(input: string) {
 
 export type AutocompleteRef = {
   onInput: (value: string) => void
-  visible: false | "@" | "/"
+  visible: false | "@" | "/" | "plugin"
 }
 
 export type AutocompleteOption = {
@@ -102,6 +107,8 @@ export function Autocomplete(props: {
     selected: 0,
     visible: false as AutocompleteRef["visible"],
     input: "keyboard" as "keyboard" | "mouse",
+    providerID: "",
+    trigger: "",
   })
 
   const [positionTick, setPositionTick] = createSignal(0)
@@ -148,7 +155,10 @@ export function Autocomplete(props: {
     // Track props.value to make memo reactive to text changes
     props.value // <- there surely is a better way to do this, like making .input() reactive
 
-    return props.input().getTextRange(store.index + 1, props.input().cursorOffset)
+    return props.input().getTextRange(
+      store.index + Bun.stringWidth(store.visible === "plugin" ? store.trigger : String(store.visible)),
+      props.input().cursorOffset,
+    )
   })
 
   // filter() reads reactive props.value plus non-reactive cursor/text state.
@@ -169,13 +179,13 @@ export function Autocomplete(props: {
     setStore("input", "keyboard")
   })
 
-  function insertPart(text: string, part: PromptInfo["parts"][number]) {
+  function insertPart(text: string, part: PromptInfo["parts"][number], prefix = "@") {
     const input = props.input()
     const currentCursorOffset = input.cursorOffset
 
     const charAfterCursor = displayCharAt(props.value, currentCursorOffset)
     const needsSpace = charAfterCursor !== " "
-    const append = "@" + text + (needsSpace ? " " : "")
+    const append = prefix + text + (needsSpace ? " " : "")
 
     input.cursorOffset = store.index
     const startCursor = input.logicalCursor
@@ -185,7 +195,7 @@ export function Autocomplete(props: {
     input.deleteRange(startCursor.row, startCursor.col, endCursor.row, endCursor.col)
     input.insertText(append)
 
-    const virtualText = "@" + text
+    const virtualText = prefix + text
     const extmarkStart = store.index
     const extmarkEnd = extmarkStart + Bun.stringWidth(virtualText)
 
@@ -238,6 +248,73 @@ export function Autocomplete(props: {
       frecency.updateFrecency(part.source.path)
     }
   }
+
+  function insertPluginSelection(selection: AutocompleteSelection) {
+    const content = selection.type === "context" ? selection.content : selection.text
+    const text = content.startsWith(store.trigger) ? content.slice(store.trigger.length) : content
+    insertPart(
+      text,
+      {
+        type: "text",
+        text: content,
+        synthetic: true,
+        metadata:
+          selection.type === "context"
+            ? { autocomplete: { ...selection.source, display: selection.display } }
+            : { autocomplete: { providerID: store.providerID, type: "text" } },
+        source: { text: { start: 0, end: 0, value: "" } },
+      },
+      content.startsWith(store.trigger) ? store.trigger : "",
+    )
+  }
+
+  const [providers] = createResource(
+    () => location(),
+    async (current) =>
+      (
+        await sdk.request<{ data: AutocompleteProviderInfo[] }>(
+          `/api/autocomplete/providers?${new URLSearchParams({
+            "location[directory]": current?.directory ?? sync.path.directory,
+            ...(current?.workspaceID ? { "location[workspace]": current.workspaceID } : {}),
+          })}`,
+        ).catch(() => ({ data: [] }))
+      ).data,
+    { initialValue: [] },
+  )
+
+  let pluginAbort: AbortController | undefined
+  onCleanup(() => pluginAbort?.abort())
+  const [pluginOptions] = createResource(
+    () =>
+      store.visible === "plugin"
+        ? { providerID: store.providerID, trigger: store.trigger, query: search(), location: location() }
+        : undefined,
+    async (input) => {
+      pluginAbort?.abort()
+      pluginAbort = new AbortController()
+      const params = new URLSearchParams({
+        "location[directory]": input.location?.directory ?? sync.path.directory,
+        ...(input.location?.workspaceID ? { "location[workspace]": input.location.workspaceID } : {}),
+        provider: input.providerID,
+        trigger: input.trigger,
+        query: input.query,
+        ...(props.sessionID ? { sessionID: props.sessionID } : {}),
+      })
+      const result = await sdk
+        .request<{ data: AutocompleteSearchResult }>(`/api/autocomplete/search?${params}`, {
+          signal: pluginAbort.signal,
+        })
+        .catch(() => ({ data: { items: [] } }))
+      return result.data.items.map(
+        (item): AutocompleteOption => ({
+          display: item.label,
+          description: item.description,
+          onSelect: () => insertPluginSelection(item.selection),
+        }),
+      )
+    },
+    { initialValue: [] },
+  )
 
   function createFilePart(
     item: FileSystemEntry,
@@ -481,6 +558,8 @@ export function Autocomplete(props: {
     const commandsValue = commands()
     const searchValue = search()
 
+    if (store.visible === "plugin") return pluginOptions()
+
     if (store.visible === "@" && referenceMatchValue) {
       return referenceAliasesValue.filter((item) => item.display === `@${referenceMatchValue.name}`)
     }
@@ -647,6 +726,10 @@ export function Autocomplete(props: {
     })
   }
 
+  function showPlugin(provider: AutocompleteProviderInfo, index: number) {
+    setStore({ visible: "plugin", index, providerID: provider.id, trigger: provider.trigger.value })
+  }
+
   function hide() {
     const text = props.input().plainText
     if (store.visible === "/" && !text.endsWith(" ") && text.startsWith("/")) {
@@ -704,7 +787,16 @@ export function Autocomplete(props: {
         if (idx !== undefined) {
           show("@")
           setStore("index", idx)
+          return
         }
+        const match = providers()
+          .toSorted((a, b) => b.trigger.value.length - a.trigger.value.length)
+          .flatMap((provider) => {
+            const index = promptTriggerIndex(value, provider.trigger.value, offset)
+            return index === undefined ? [] : [{ provider, index }]
+          })[0]
+        if (!match) return
+        showPlugin(match.provider, match.index)
       },
     })
   })
