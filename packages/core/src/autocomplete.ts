@@ -24,7 +24,7 @@ export type Registry = {
 }
 
 export interface Interface {
-  readonly initialize: (load: () => Effect.Effect<void>) => () => void
+  readonly initialize: (load: (directory: string) => Effect.Effect<void>) => () => void
   readonly registry: (directory: string) => Registry
   readonly providers: (directory: string) => Effect.Effect<Autocomplete.ProviderInfo[]>
   readonly search: (input: {
@@ -43,7 +43,7 @@ const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
     const locations = new Map<string, { providers: Map<string, Provider>; triggers: Map<string, string> }>()
-    const initializers = new Set<() => Effect.Effect<void>>()
+    const initializers = new Set<(directory: string) => Effect.Effect<void>>()
 
     return Service.of({
       initialize(load) {
@@ -74,13 +74,13 @@ const layer = Layer.effect(
         }
       },
       providers: Effect.fn("Autocomplete.providers")(function* (directory) {
-        yield* Effect.all(Array.from(initializers, (initialize) => initialize()), { discard: true })
+        yield* Effect.all(Array.from(initializers, (initialize) => initialize(directory)), { discard: true })
         return Array.from(locations.get(directory)?.providers.values() ?? [])
           .map((provider) => provider.info)
           .sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0) || a.id.localeCompare(b.id))
       }),
       search: Effect.fn("Autocomplete.search")(function* (input) {
-        yield* Effect.all(Array.from(initializers, (initialize) => initialize()), { discard: true })
+        yield* Effect.all(Array.from(initializers, (initialize) => initialize(input.directory)), { discard: true })
         const provider = locations.get(input.directory)?.providers.get(input.providerID)
         if (!provider || provider.info.trigger.value !== input.trigger) return { items: [] }
         const result = yield* Effect.tryPromise({

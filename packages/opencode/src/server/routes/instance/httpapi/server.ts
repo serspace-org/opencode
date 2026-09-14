@@ -180,6 +180,17 @@ const serverRoutes = HttpApiBuilder.layer(Api).pipe(
   Layer.provide(PluginPtyEnvironment.layer),
   Layer.provide([serverHttpApiAuthLayer, v2SchemaErrorLayer]),
 )
+const autocompleteInitializer = Layer.effectDiscard(
+  Effect.gen(function* () {
+    const autocomplete = yield* Autocomplete.Service
+    const plugin = yield* Plugin.Service
+    const instances = yield* InstanceStore.Service
+    yield* Effect.acquireRelease(
+      Effect.sync(() => autocomplete.initialize((directory) => instances.provide({ directory }, plugin.init()))),
+      (dispose) => Effect.sync(dispose),
+    )
+  }),
+)
 
 // `OpenApi.fromApi` is non-trivial; defer until /doc is actually hit so
 // processes that never serve it (CLI, scripts) don't pay at module load.
@@ -281,6 +292,7 @@ export function createRoutes(
     ptyConnectApiRoutes,
     instanceRoutes,
     serverRoutes,
+    autocompleteInitializer,
     docRoute,
     uiRoute,
   ).pipe(

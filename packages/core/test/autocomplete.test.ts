@@ -39,4 +39,18 @@ describe("autocomplete registry", () => {
       }),
     )
   })
+
+  test("initializes providers for the requested directory", async () => {
+    await run(
+      Effect.gen(function* () {
+        const autocomplete = yield* Autocomplete.Service
+        autocomplete.initialize((directory) =>
+          Effect.sync(() => {
+            autocomplete.registry(directory).add(provider("example.one", "#"))
+          }),
+        )
+        expect(yield* autocomplete.providers("/tmp/one")).toEqual([provider("example.one", "#").info])
+      }),
+    )
+  })
 })

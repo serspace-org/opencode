@@ -26,7 +26,6 @@ export const errorLayer = HttpRouter.middleware<{ handles: unknown }>()((effect)
       }
 
       const ref = `err_${crypto.randomUUID().slice(0, 8)}`
-      console.error(Cause.pretty(cause))
       return Effect.logError("failed", { ref, error, cause: Cause.pretty(cause) }).pipe(
         Effect.as(
           HttpServerResponse.jsonUnsafe(

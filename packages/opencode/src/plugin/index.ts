@@ -298,11 +298,6 @@ const layer = Layer.effect(
         return { hooks }
       }),
     )
-    yield* Effect.acquireRelease(
-      Effect.sync(() => autocomplete.initialize(() => InstanceState.get(state).pipe(Effect.asVoid))),
-      (dispose) => Effect.sync(dispose),
-    )
-
     const trigger = Effect.fn("Plugin.trigger")(function* <
       Name extends TriggerName,
       Input = Parameters<Required<Hooks>[Name]>[0],
