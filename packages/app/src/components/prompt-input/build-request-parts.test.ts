@@ -15,6 +15,16 @@ describe("buildRequestParts", () => {
         selection: { startLine: 4, startChar: 1, endLine: 6, endChar: 1 },
       },
       { type: "agent", name: "planner", content: "@planner", start: 16, end: 24 },
+      {
+        type: "plugin",
+        providerID: "example.records",
+        entityType: "person",
+        entityID: "person_ada",
+        display: "Ada Lovelace",
+        content: "#Ada Lovelace",
+        start: 24,
+        end: 37,
+      },
     ]
 
     const result = buildRequestParts({
@@ -35,6 +45,14 @@ describe("buildRequestParts", () => {
       result.requestParts.some((part) => part.type === "file" && part.url.startsWith("file:///repo/src/foo.ts")),
     ).toBe(true)
     expect(result.requestParts.some((part) => part.type === "text" && part.synthetic)).toBe(true)
+    expect(
+      result.requestParts.some(
+        (part) =>
+          part.type === "text" &&
+          part.synthetic &&
+          (part.metadata?.autocomplete as { entityID?: string } | undefined)?.entityID === "person_ada",
+      ),
+    ).toBe(true)
     expect(
       result.requestParts.some(
         (part) =>

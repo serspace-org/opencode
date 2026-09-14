@@ -54,6 +54,7 @@ import { EventV2Bridge } from "@/event-v2-bridge"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { AppNodeBuilderV1 } from "./app-node-builder-v1"
 import { SessionProjector } from "@opencode-ai/core/session/projector"
+import { Autocomplete } from "@opencode-ai/core/autocomplete"
 
 export const AppLayer = AppNodeBuilderV1.build(
   LayerNode.group([
@@ -67,6 +68,7 @@ export const AppLayer = AppNodeBuilderV1.build(
     Storage.node,
     Snapshot.node,
     Plugin.node,
+    Autocomplete.node,
     ModelsDev.node,
     Provider.node,
     ProviderAuth.node,

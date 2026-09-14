@@ -83,6 +83,10 @@ import type {
   FilesFindOutput,
   CommandsListInput,
   CommandsListOutput,
+  ServerAutocompleteProvidersInput,
+  ServerAutocompleteProvidersOutput,
+  ServerAutocompleteSearchInput,
+  ServerAutocompleteSearchOutput,
   SkillsListInput,
   SkillsListOutput,
   EventsSubscribeOutput,
@@ -787,6 +791,38 @@ export function make(options: ClientOptions) {
             method: "GET",
             path: `/api/command`,
             query: { location: input?.["location"] },
+            successStatus: 200,
+            declaredStatuses: [401, 400],
+            empty: false,
+          },
+          requestOptions,
+        ),
+    },
+    "server.autocomplete": {
+      providers: (input?: ServerAutocompleteProvidersInput, requestOptions?: RequestOptions) =>
+        request<ServerAutocompleteProvidersOutput>(
+          {
+            method: "GET",
+            path: `/api/autocomplete/providers`,
+            query: { location: input?.["location"] },
+            successStatus: 200,
+            declaredStatuses: [401, 400],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      search: (input: ServerAutocompleteSearchInput, requestOptions?: RequestOptions) =>
+        request<ServerAutocompleteSearchOutput>(
+          {
+            method: "GET",
+            path: `/api/autocomplete/search`,
+            query: {
+              location: input["location"],
+              provider: input["provider"],
+              trigger: input["trigger"],
+              query: input["query"],
+              sessionID: input["sessionID"],
+            },
             successStatus: 200,
             declaredStatuses: [401, 400],
             empty: false,

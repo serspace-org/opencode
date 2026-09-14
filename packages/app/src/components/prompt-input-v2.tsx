@@ -6,7 +6,7 @@ import { Icon } from "@opencode-ai/ui/v2/icon"
 import { KeybindV2 } from "@opencode-ai/ui/v2/keybind-v2"
 import { TooltipV2 } from "@opencode-ai/ui/v2/tooltip-v2"
 import type { ReferenceInfo } from "@opencode-ai/sdk/v2/client"
-import { createEffect, createMemo, on, Show } from "solid-js"
+import { createEffect, createMemo, createResource, on, Show } from "solid-js"
 import { ModelSelectorPopoverV2 } from "@/components/dialog-select-model"
 import { DialogSelectModelUnpaidV2 } from "@/components/dialog-select-model-unpaid-v2"
 import type { PromptInputProps } from "@/components/prompt-input/contracts"
@@ -23,9 +23,12 @@ import { usePermission } from "@/context/permission"
 import { type ImageAttachmentPart, usePrompt } from "@/context/prompt"
 import { usePlatform } from "@/context/platform"
 import { useSDK } from "@/context/sdk"
+import { useServerSDK } from "@/context/server-sdk"
 import { useSync } from "@/context/sync"
 import { createSessionTabs } from "@/pages/session/helpers"
 import { showToast } from "@/utils/toast"
+import { authTokenFromCredentials } from "@/utils/server"
+import type { Autocomplete } from "@opencode-ai/schema/autocomplete"
 import { PromptInputV2, type PromptInputV2Suggestion } from "@opencode-ai/session-ui/v2/prompt-input"
 import {
   createPromptInputV2Controller,
@@ -80,6 +83,18 @@ export function PromptInputV2Composer(props: PromptInputV2ComposerProps) {
 
 export function usePromptInputV2Controller(props: PromptInputV2ControllerProps): PromptInputV2ComposerController {
   const sdk = useSDK()
+  const serverSDK = useServerSDK()
+  const autocompleteRequest = async <T,>(path: string, signal?: AbortSignal) => {
+    const server = serverSDK().server.http
+    const response = await fetch(new URL(path, server.url), {
+      signal,
+      headers: server.password
+        ? { Authorization: `Basic ${authTokenFromCredentials({ username: server.username, password: server.password })}` }
+        : undefined,
+    })
+    if (!response.ok) throw new Error(`Autocomplete request failed: ${response.status}`)
+    return response.json() as Promise<{ data: T }>
+  }
   const sync = useSync()
   const files = useFile()
   const layout = useLayout()
@@ -318,6 +333,15 @@ export function usePromptInputV2Controller(props: PromptInputV2ControllerProps):
       keybind: command.keybindParts(item.id),
     })),
   )
+  const [autocompleteProviders] = createResource(
+    () => `${serverSDK().url}:${sdk().directory}`,
+    async () =>
+      (
+        await autocompleteRequest<Autocomplete.ProviderInfo[]>(
+          `/api/autocomplete/providers?location[directory]=${encodeURIComponent(sdk().directory)}`,
+        )
+      ).data,
+  )
   const variants = createMemo(() => ["default", ...props.controls.model.selection.variant.list()])
   const controller = createPromptInputV2Controller({
     store: () => prompt.capture().store,
@@ -335,6 +359,47 @@ export function usePromptInputV2Controller(props: PromptInputV2ControllerProps):
     },
     commands,
     context,
+    autocomplete: {
+      providers: () => autocompleteProviders() ?? [],
+      search: async (providerID, trigger, query, signal) => {
+        const params = new URLSearchParams({
+          "location[directory]": sdk().directory,
+          provider: providerID,
+          trigger,
+          query,
+          ...(props.controls.session.id ? { sessionID: props.controls.session.id } : {}),
+        })
+        const result = await autocompleteRequest<Autocomplete.SearchResult>(
+          `/api/autocomplete/search?${params}`,
+          signal,
+        )
+        return result.data.items.map((item) => {
+          const selection = item.selection
+          const source =
+            selection.type === "context"
+              ? selection.source
+              : { providerID, entityType: "text", entityID: item.id }
+          return {
+            id: `plugin:${providerID}:${item.id}`,
+            kind: "plugin" as const,
+            label: item.label,
+            description: item.description,
+            group: item.group,
+            mention: {
+              type: "plugin" as const,
+              providerID: source.providerID,
+              entityType: source.entityType,
+              entityID: source.entityID,
+              metadata: selection.type === "context" ? source.metadata : undefined,
+              display: selection.type === "context" ? selection.display : selection.text,
+              content: selection.type === "context" ? selection.content : selection.text,
+              start: 0,
+              end: 0,
+            },
+          }
+        })
+      },
+    },
     searchContextFiles: async (query) =>
       (await files.searchFilesAndDirectories(query)).map((path) => ({
         id: `file:${path}`,

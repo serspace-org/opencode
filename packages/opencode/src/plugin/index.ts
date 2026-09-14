@@ -33,6 +33,7 @@ import type { WorkspaceAdapter } from "@/control-plane/types"
 import { RuntimeFlags } from "@/effect/runtime-flags"
 import { EventV2Bridge } from "@/event-v2-bridge"
 import { InstallationChannel } from "@opencode-ai/core/installation/version"
+import { Autocomplete } from "@opencode-ai/core/autocomplete"
 
 type State = {
   hooks: Hooks[]
@@ -130,10 +131,12 @@ const layer = Layer.effect(
     const events = yield* EventV2Bridge.Service
     const config = yield* Config.Service
     const flags = yield* RuntimeFlags.Service
+    const autocomplete = yield* Autocomplete.Service
 
     const state = yield* InstanceState.make<State>(
       Effect.fn("Plugin.state")(function* (ctx) {
         const hooks: Hooks[] = []
+        const autocompleteDisposers: Array<() => void> = []
         const bridge = yield* EffectBridge.make()
 
         function publishPluginError(message: string) {
@@ -175,7 +178,9 @@ const layer = Layer.effect(
             Effect.tapError((error) => Effect.logError("failed to load internal plugin", { name: plugin.name, error })),
             Effect.option,
           )
-          if (init._tag === "Some") hooks.push(init.value)
+          if (init._tag === "Some") {
+            hooks.push(init.value)
+          }
         }
 
         const plugins = flags.pure ? [] : (cfg.plugin_origins ?? [])
@@ -241,6 +246,17 @@ const layer = Layer.effect(
           )
         }
 
+        hooks.forEach((hook) => {
+          if (!hook.autocomplete) return
+          hook.autocomplete.register({
+            add: (provider) => {
+              const dispose = autocomplete.registry.add(provider)
+              autocompleteDisposers.push(dispose)
+              return dispose
+            },
+          })
+        })
+
         // Notify plugins of current config
         for (const hook of hooks) {
           yield* Effect.tryPromise({
@@ -277,6 +293,8 @@ const layer = Layer.effect(
           ),
         )
 
+        yield* Effect.addFinalizer(() => Effect.sync(() => autocompleteDisposers.forEach((dispose) => dispose())))
+
         return { hooks }
       }),
     )
@@ -312,7 +330,7 @@ const layer = Layer.effect(
 export const node = LayerNode.make({
   service: Service,
   layer: layer,
-  deps: [EventV2Bridge.node, Config.node, RuntimeFlags.node],
+  deps: [EventV2Bridge.node, Config.node, RuntimeFlags.node, Autocomplete.node],
 })
 
 export * as Plugin from "."

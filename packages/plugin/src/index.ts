@@ -67,6 +67,58 @@ export type PluginInput = {
 
 export type PluginOptions = Record<string, unknown>
 
+export type AutocompleteProviderInfo = {
+  id: string
+  trigger: { value: string; kind: "character" | "prefix"; description?: string }
+  title: string
+  description?: string
+  priority?: number
+  maxResults?: number
+  cacheTTL?: number
+}
+
+export type AutocompleteSelection =
+  | { type: "text"; text: string }
+  | {
+      type: "context"
+      content: string
+      display: string
+      source: {
+        providerID: string
+        entityType: string
+        entityID: string
+        metadata?: Record<string, string>
+      }
+    }
+
+export type AutocompleteProvider = {
+  info: AutocompleteProviderInfo
+  search(input: {
+    providerID: string
+    trigger: string
+    query: string
+    directory: string
+    workspaceID?: string
+    sessionID?: string
+    signal: AbortSignal
+  }): Promise<{
+    items: Array<{
+      id: string
+      label: string
+      description?: string
+      group?: string
+      icon?: string
+      detail?: string
+      selection: AutocompleteSelection
+    }>
+    stale?: boolean
+  }>
+}
+
+export type AutocompleteRegistry = {
+  add(provider: AutocompleteProvider): () => void
+}
+
 export type Config = Omit<SDKConfig, "plugin"> & {
   plugin?: Array<string | [string, PluginOptions]>
 }
@@ -221,6 +273,9 @@ export type AuthOuathResult = AuthOAuthResult
 
 export interface Hooks {
   dispose?: () => Promise<void>
+  autocomplete?: {
+    register(register: AutocompleteRegistry): void
+  }
   event?: (input: { event: Event }) => Promise<void>
   config?: (input: Config) => Promise<void>
   tool?: {

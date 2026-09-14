@@ -5,6 +5,7 @@ import { createPromptInputV2Attachments, type PromptInputV2AttachmentConfig } fr
 import { createPromptInputV2Store, type PromptInputV2StoreInput } from "./store"
 import type {
   PromptInputV2Attachment,
+  PromptInputV2Autocomplete,
   PromptInputV2Comment,
   PromptInputV2History,
   PromptInputV2HistoryEntry,
@@ -68,6 +69,7 @@ export function createPromptInputV2Controller(input: {
   onSuggestionSelect?: (item: PromptInputV2Suggestion) => (() => void) | void
   view: PromptInputV2ViewConfig
   attachments?: PromptInputV2AttachmentConfig
+  autocomplete?: PromptInputV2Autocomplete
 }) {
   let editor: HTMLElement | undefined
   let fileInput: HTMLInputElement | undefined
@@ -78,7 +80,7 @@ export function createPromptInputV2Controller(input: {
   }
   function addPart(part: PromptInputV2PersistedState["prompt"][number]) {
     if (part.type === "image") return false
-    if (part.type === "file" || part.type === "agent") {
+    if (part.type === "file" || part.type === "agent" || part.type === "plugin") {
       draft.addMention(part)
       return true
     }
@@ -135,7 +137,21 @@ export function createPromptInputV2Controller(input: {
     key: (item) => item.id,
     filterKeys: ["trigger", "title"],
   })
-  const list = () => (state.popover.type === "context" ? contextList : commandList)
+  let autocompleteAbort: AbortController | undefined
+  const pluginList = useFilteredList<PromptInputV2Suggestion>({
+    items: async (query) => {
+      if (state.popover.type !== "plugin" || !input.autocomplete) return []
+      autocompleteAbort?.abort()
+      autocompleteAbort = new AbortController()
+      return input.autocomplete.search(state.popover.providerID, state.popover.trigger, query, autocompleteAbort.signal)
+    },
+    key: (item) => item.id,
+    filterKeys: ["label"],
+    skipFilter: () => true,
+    groupBy: (item) => item.group ?? "plugin",
+  })
+  const list = () =>
+    state.popover.type === "context" ? contextList : state.popover.type === "plugin" ? pluginList : commandList
   const suggestions = () => list().flat()
 
   const execute = (command: PromptInputV2InteractionCommand) => {
@@ -148,7 +164,9 @@ export function createPromptInputV2Controller(input: {
       return
     }
     if (command.type === "popover.filter") {
-      ;(command.popover === "command" ? commandList : contextList).onInput(command.query)
+      ;(command.popover === "command" ? commandList : command.popover === "plugin" ? pluginList : contextList).onInput(
+        command.query,
+      )
       return
     }
     if (command.type === "suggestion.select") {
@@ -340,7 +358,7 @@ export function createPromptInputV2Controller(input: {
     restoreFocus,
     onInput(value: string, prompt?: PromptInputV2PersistedState["prompt"], cursor?: number) {
       if (prompt) draft.setPrompt(prompt, cursor)
-      dispatch({ type: "input.changed", value, persist: !prompt })
+      dispatch({ type: "input.changed", value, persist: !prompt, providers: input.autocomplete?.providers() })
     },
     onCursor(cursor: number) {
       draft.setCursor(cursor)
